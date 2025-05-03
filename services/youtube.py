@@ -30,6 +30,12 @@ from config.settings import (
     COOKIES_PATH
 )
 
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+    logging.info("SSL certificate verification disabled")
+except Exception as e:
+    logging.error(f"Failed to modify SSL context: {e}")
+
 class YouTubeService:
     """Handles YouTube video downloading and metadata extraction"""
     
