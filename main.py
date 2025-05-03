@@ -220,3 +220,4 @@ if st.session_state.video_id:
                 except Exception as e:
                     st.error(f"Error generating summary: {str(e)}")
                     status.update(label="Summary generation failed", state="error")
+
