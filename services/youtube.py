@@ -18,6 +18,10 @@ class YouTubeService:
         video_id = self.extract_video_id(url)
         output_path = os.path.join(MEDIA_DIR, f"{video_id}.{AUDIO_FORMAT}")
 
+        # ✅ Create parent directories if they don't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # ✅ If file already downloaded, skip
         if os.path.exists(output_path):
             return output_path
 
@@ -27,6 +31,7 @@ class YouTubeService:
             if not audio_stream:
                 raise Exception("No suitable audio stream found")
 
+            # ✅ Download to the safe path
             audio_stream.download(filename=output_path)
             return output_path
         except Exception as e:
