@@ -22,10 +22,10 @@ class TranscriptionService:
                 return json.load(f)
 
         # ✅ WAIT for file to exist before transcription
-        for _ in range(10):  # wait max 5 seconds
+        for _ in range(100):  # wait max 5 seconds
             if os.path.exists(audio_path):
                 break
-            time.sleep(0.5)
+            time.sleep(5)
         else:
             raise FileNotFoundError(f"[ERROR] Audio not found after download: {audio_path}")
 
