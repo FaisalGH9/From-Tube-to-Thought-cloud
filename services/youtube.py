@@ -5,7 +5,7 @@ import os
 import re
 import hashlib
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import yt_dlp
 from pydub import AudioSegment
@@ -16,9 +16,8 @@ from config.settings import (
     DEFAULT_AUDIO_QUALITY,
     LONG_AUDIO_QUALITY,
     LONG_VIDEO_THRESHOLD,
-    COOKIES_PATH  # ✅ use cookies.txt path
+    COOKIES_PATH  # ✅ Required for cookie auth
 )
-
 
 class YouTubeService:
     """Handles YouTube video downloading and metadata extraction"""
@@ -42,7 +41,6 @@ class YouTubeService:
         duration = options.get('duration', 'full_video')
         video_info = await self._get_video_info(url)
         duration_seconds = video_info.get('duration', 0)
-
         audio_quality = DEFAULT_AUDIO_QUALITY
         if duration_seconds > LONG_VIDEO_THRESHOLD:
             audio_quality = LONG_AUDIO_QUALITY
@@ -50,7 +48,7 @@ class YouTubeService:
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': f'{output_path}.%(ext)s',
-            'cookiefile': COOKIES_PATH,  # ✅ use cookies.txt
+            'cookiefile': COOKIES_PATH,  # ✅ Inject cookies
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': AUDIO_FORMAT,
@@ -73,16 +71,14 @@ class YouTubeService:
             'quiet': True,
             'skip_download': True,
             'no_warnings': True,
-            'cookiefile': COOKIES_PATH  # ✅ use cookies.txt here too
+            'cookiefile': COOKIES_PATH  # ✅ Inject cookies for metadata access too
         }
 
         loop = asyncio.get_event_loop()
-        info_dict = await loop.run_in_executor(
+        return await loop.run_in_executor(
             None,
             lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=False)
         )
-
-        return info_dict
 
     def _download_with_options(self, url: str, options: Dict[str, Any]) -> None:
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -101,7 +97,6 @@ class YouTubeService:
             return audio_path
 
         output_path = audio_path.replace(f".{AUDIO_FORMAT}", f"_{duration}.{AUDIO_FORMAT}")
-
         if os.path.exists(output_path):
             return output_path
 
