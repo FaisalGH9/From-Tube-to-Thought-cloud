@@ -110,19 +110,19 @@ class YouTubeService:
         if os.path.exists(COOKIES_PATH):
             print(f"{debug_prefix}: Using cookies file at {COOKIES_PATH}")
             ydl_opts['cookiefile'] = COOKIES_PATH
+            # When using cookies, don't use android client
+            ydl_opts['user_agent'] = YT_USER_AGENT
         else:
             print(f"{debug_prefix}: WARNING - No cookies file found at {COOKIES_PATH}")
-        
-        # Add anti-bot evasion options
-        if USE_ALTERNATE_AGENTS:
-            ydl_opts['user_agent'] = YT_USER_AGENT
-            # Add extractor args to bypass some YouTube protections
-            ydl_opts['extractor_args'] = {
-                'youtube': {
-                    'player_client': ['android'],
-                    'player_skip': ['webpage', 'configs', 'js']
+            # Only use android client when NOT using cookies
+            if USE_ALTERNATE_AGENTS:
+                ydl_opts['user_agent'] = YT_USER_AGENT
+                ydl_opts['extractor_args'] = {
+                    'youtube': {
+                        'player_client': ['android'],
+                        'player_skip': ['webpage', 'configs', 'js']
+                    }
                 }
-            }
         
         return ydl_opts
     
@@ -138,21 +138,23 @@ class YouTubeService:
             }],
             'quiet': False,
             'verbose': True,
-            'user_agent': 'Mozilla/5.0 (Android 12; Mobile; rv:68.0) Gecko/68.0 Firefox/96.0',
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android'],
-                    'player_skip': ['webpage', 'configs', 'js']
-                }
-            },
-            'geo_verification_proxy': '',  # Remove geo restrictions
-            'socket_timeout': 30,           # Increase timeout
-            'retries': 10,                  # More retries
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36',
+            'socket_timeout': 30,
+            'retries': 10,
         }
         
         # Only add cookies if file exists
         if os.path.exists(COOKIES_PATH):
             fallback_opts['cookiefile'] = COOKIES_PATH
+            # Don't use player_client with cookies
+        else:
+            # Try without cookies
+            fallback_opts['extractor_args'] = {
+                'youtube': {
+                    'player_client': ['android'],
+                    'player_skip': ['webpage', 'configs', 'js']
+                }
+            }
         
         return fallback_opts
     
@@ -168,21 +170,22 @@ class YouTubeService:
         }
         
         # Add cookies if file exists
-        if os.path.exists(COOKIES_PATH):
+        cookies_exist = os.path.exists(COOKIES_PATH)
+        if cookies_exist:
             print(f"get_video_info: Using cookies file at {COOKIES_PATH}")
             ydl_opts['cookiefile'] = COOKIES_PATH
+            ydl_opts['user_agent'] = YT_USER_AGENT
         else:
             print(f"get_video_info: WARNING - No cookies file found at {COOKIES_PATH}")
-        
-        # Add anti-bot evasion options
-        if USE_ALTERNATE_AGENTS:
-            ydl_opts['user_agent'] = YT_USER_AGENT
-            ydl_opts['extractor_args'] = {
-                'youtube': {
-                    'player_client': ['android'],
-                    'player_skip': ['webpage', 'configs', 'js']
+            # Only use android client when NOT using cookies
+            if USE_ALTERNATE_AGENTS:
+                ydl_opts['user_agent'] = YT_USER_AGENT
+                ydl_opts['extractor_args'] = {
+                    'youtube': {
+                        'player_client': ['android'],
+                        'player_skip': ['webpage', 'configs', 'js']
+                    }
                 }
-            }
         
         loop = asyncio.get_event_loop()
         try:
@@ -197,26 +200,37 @@ class YouTubeService:
             print(f"Error extracting video info: {str(e)}")
             # Try with fallback options
             try:
+                # Switch strategies - if cookies failed, try without cookies
+                # If no cookies were used, try with a different approach
                 fallback_opts = {
                     'format': 'bestaudio/best',
                     'quiet': False,
                     'skip_download': True,
                     'no_warnings': False,
                     'verbose': True,
-                    'user_agent': 'Mozilla/5.0 (Android 12; Mobile; rv:68.0) Gecko/68.0 Firefox/96.0',
-                    'extractor_args': {
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36',
+                }
+                
+                # Flip the strategy for fallback
+                if cookies_exist:
+                    # First attempt used cookies, now try without cookies and with android client
+                    fallback_opts['extractor_args'] = {
                         'youtube': {
                             'player_client': ['android'],
                             'player_skip': ['webpage', 'configs', 'js']
                         }
                     }
-                }
+                    print("Trying fallback without cookies, using android client...")
+                else:
+                    # First attempt was without cookies or with android client, now try with cookies
+                    if os.path.exists(COOKIES_PATH):
+                        fallback_opts['cookiefile'] = COOKIES_PATH
+                        print("Trying fallback with cookies, without android client...")
+                    else:
+                        # No cookies available, try a completely different user agent
+                        fallback_opts['user_agent'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1'
+                        print("Trying fallback with iOS user agent...")
                 
-                # Only add cookies if file exists
-                if os.path.exists(COOKIES_PATH):
-                    fallback_opts['cookiefile'] = COOKIES_PATH
-                
-                print("Trying fallback options for video info extraction...")
                 info_dict = await loop.run_in_executor(
                     None, 
                     lambda: yt_dlp.YoutubeDL(fallback_opts).extract_info(url, download=False)
