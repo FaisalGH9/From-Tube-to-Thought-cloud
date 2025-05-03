@@ -110,4 +110,3 @@ class ProcessingEngine:
         self.cache_manager.cache_response(video_id, f"summarize {length}", summary)
 
         return summary
-      
