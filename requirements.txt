@@ -12,3 +12,4 @@ aiohttp
 requests
 pytube
 pytubefix
+langdetect==1.0.9
