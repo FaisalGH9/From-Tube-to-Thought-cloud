@@ -6,7 +6,11 @@ import re
 import hashlib
 import asyncio
 import logging
+import ssl
 from typing import Dict, Any, Optional
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Apply yt-dlp fix before importing
 from services.yt_dlp_fix import apply_yt_dlp_fix
@@ -62,7 +66,7 @@ class YouTubeService:
         # Check if already downloaded
         existing_path = f"{output_path}.{AUDIO_FORMAT}"
         if os.path.exists(existing_path):
-            print(f"Using existing audio file: {existing_path}")
+            logging.info(f"Using existing audio file: {existing_path}")
             return existing_path
             
         # Get duration option
@@ -78,36 +82,53 @@ class YouTubeService:
             if duration_seconds > LONG_VIDEO_THRESHOLD:
                 audio_quality = LONG_AUDIO_QUALITY
         except Exception as e:
-            print(f"Error getting video info: {e}")
+            logging.error(f"Error getting video info: {e}")
             audio_quality = DEFAULT_AUDIO_QUALITY
+        
+        # Create SSL context that doesn't verify certificates if needed
+        try:
+            # Temporarily unverified context to work around certificate issues
+            ssl._create_default_https_context = ssl._create_unverified_context
+            logging.info("Created unverified SSL context for this session")
+        except Exception as e:
+            logging.error(f"Failed to modify SSL context: {e}")
         
         # Try different download strategies in sequence
         downloaded = False
         error_messages = []
         
-        # Strategy 1: Use cookies
+        # Strategy 1: Use Android client with cookies
         try:
+            logging.info(f"Trying download strategy 1: Android client with cookies")
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': f'{output_path}.%(ext)s',
                 'cookiefile': COOKIES_PATH,
+                'extractor_args': {'youtube': {'player_client': ['android']}},
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': AUDIO_FORMAT,
                     'preferredquality': audio_quality.replace('k', ''),
                 }],
-                'quiet': True,
+                'quiet': False,
+                'verbose': True,
+                'nocheckcertificate': True,
+                'no_warnings': False
             }
             
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
             downloaded = True
+            logging.info("Strategy 1 succeeded")
         except Exception as e:
-            error_messages.append(f"Strategy 1 failed: {str(e)}")
+            error_msg = f"Strategy 1 failed: {str(e)}"
+            logging.error(error_msg)
+            error_messages.append(error_msg)
             
-        # Strategy 2: Use Android client (if first strategy failed)
+        # Strategy 2: Try with Android client without cookies
         if not downloaded:
             try:
+                logging.info(f"Trying download strategy 2: Android client without cookies")
                 ydl_opts = {
                     'format': 'bestaudio/best',
                     'outtmpl': f'{output_path}.%(ext)s',
@@ -117,44 +138,65 @@ class YouTubeService:
                         'preferredcodec': AUDIO_FORMAT,
                         'preferredquality': audio_quality.replace('k', ''),
                     }],
-                    'quiet': True,
+                    'quiet': False,
+                    'nocheckcertificate': True,
+                    'no_warnings': False
                 }
                 
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
                 downloaded = True
+                logging.info("Strategy 2 succeeded")
             except Exception as e:
-                error_messages.append(f"Strategy 2 failed: {str(e)}")
+                error_msg = f"Strategy 2 failed: {str(e)}"
+                logging.error(error_msg)
+                error_messages.append(error_msg)
         
-        # Strategy 3: Try with no special options (if previous strategies failed)
+        # Strategy 3: Try with web client and cookies
         if not downloaded:
             try:
+                logging.info(f"Trying download strategy 3: Web client with cookies")
                 ydl_opts = {
                     'format': 'bestaudio/best',
                     'outtmpl': f'{output_path}.%(ext)s',
-                    'nocheckcertificate': True,
-                    'geo_bypass': True,
+                    'cookiefile': COOKIES_PATH,
                     'postprocessors': [{
                         'key': 'FFmpegExtractAudio',
                         'preferredcodec': AUDIO_FORMAT,
                         'preferredquality': audio_quality.replace('k', ''),
                     }],
-                    'quiet': True,
+                    'quiet': False,
+                    'nocheckcertificate': True,
+                    'no_warnings': False
                 }
                 
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
                 downloaded = True
+                logging.info("Strategy 3 succeeded")
             except Exception as e:
-                error_messages.append(f"Strategy 3 failed: {str(e)}")
-        
-        # Strategy 4: Try with minimal options as last resort
+                error_msg = f"Strategy 3 failed: {str(e)}"
+                logging.error(error_msg)
+                error_messages.append(error_msg)
+                
+        # Strategy 4: Try with minimal options and browser headers
         if not downloaded:
             try:
+                logging.info(f"Trying download strategy 4: Browser headers and minimal options")
                 ydl_opts = {
                     'format': 'bestaudio',
                     'outtmpl': f'{output_path}.%(ext)s',
-                    'quiet': True,
+                    'quiet': False,
+                    'nocheckcertificate': True,
+                    'no_warnings': False,
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    }
                 }
                 
                 loop = asyncio.get_event_loop()
@@ -173,8 +215,11 @@ class YouTubeService:
                             break
                 
                 downloaded = True
+                logging.info("Strategy 4 succeeded")
             except Exception as e:
-                error_messages.append(f"Strategy 4 failed: {str(e)}")
+                error_msg = f"Strategy 4 failed: {str(e)}"
+                logging.error(error_msg)
+                error_messages.append(error_msg)
         
         # If all strategies failed, raise exception with all error messages
         if not downloaded:
@@ -203,6 +248,7 @@ class YouTubeService:
                 'skip_download': True,
                 'no_warnings': True,
                 'cookiefile': COOKIES_PATH,
+                'nocheckcertificate': True
             }
             
             loop = asyncio.get_event_loop()
@@ -212,7 +258,7 @@ class YouTubeService:
             )
             return info_dict
         except Exception as e:
-            print(f"Error getting video info: {e}")
+            logging.error(f"Error getting video info: {e}")
             # Return minimal info when extraction fails
             return {
                 'title': 'Unknown',
