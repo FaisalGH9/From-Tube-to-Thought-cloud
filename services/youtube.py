@@ -12,6 +12,22 @@ from typing import Dict, Any, Optional
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
+# Apply SSL certificate verification bypass - try ALL possible methods
+try:
+    # Method 1: Disable certificate verification globally
+    ssl._create_default_https_context = ssl._create_unverified_context
+    logging.info("SSL certificate verification disabled (Method 1)")
+except Exception as e:
+    logging.error(f"Failed to apply SSL fix method 1: {e}")
+
+try:
+    # Method 2: Monkey patch urllib
+    original_https_handler = urllib.request.HTTPSHandler
+    urllib.request.HTTPSHandler = lambda debuglevel=0, context=None, check_hostname=None: original_https_handler(debuglevel, ssl._create_unverified_context())
+    logging.info("SSL certificate verification disabled (Method 2)")
+except Exception as e:
+    logging.error(f"Failed to apply SSL fix method 2: {e}")
+
 # Apply yt-dlp fix before importing
 from services.yt_dlp_fix import apply_yt_dlp_fix
 success = apply_yt_dlp_fix()
@@ -29,12 +45,6 @@ from config.settings import (
     LONG_VIDEO_THRESHOLD,
     COOKIES_PATH
 )
-
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-    logging.info("SSL certificate verification disabled")
-except Exception as e:
-    logging.error(f"Failed to modify SSL context: {e}")
 
 class YouTubeService:
     """Handles YouTube video downloading and metadata extraction"""
@@ -116,10 +126,21 @@ class YouTubeService:
                     'preferredcodec': AUDIO_FORMAT,
                     'preferredquality': audio_quality.replace('k', ''),
                 }],
-                'quiet': False,
+                ''quiet': False,
                 'verbose': True,
+                # Add ALL SSL and security bypasses
                 'nocheckcertificate': True,
-                'no_warnings': False
+                'no_warnings': False,
+                 'prefer_insecure': True,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+    }
+}
             }
             
             loop = asyncio.get_event_loop()
