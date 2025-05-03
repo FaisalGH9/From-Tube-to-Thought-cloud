@@ -34,6 +34,11 @@ PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "youtube-index")
 DEFAULT_CHUNK_SIZE = 4000
 DEFAULT_CHUNK_OVERLAP = 400
 
+# Create storage folders at startup (Streamlit Cloud-safe)
+os.makedirs(MEDIA_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(VECTOR_DIR, exist_ok=True)
+
 # Performance Settings
 MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT", "3"))
 CACHE_TTL = 86400  # 24 hours (in seconds)
