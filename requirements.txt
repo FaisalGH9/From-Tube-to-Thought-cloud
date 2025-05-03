@@ -132,7 +132,7 @@ wrapt==1.17.2
 xxhash==3.5.0
 yarl==1.20.0
 youtube-transcript-api==1.0.3
-yt-dlp==2025.3.31
+yt-dlp==2024.3.10
 zipp==3.21.0
 zstandard==0.23.0
 pytube==15.0.0
