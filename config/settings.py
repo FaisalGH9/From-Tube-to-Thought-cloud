@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+COOKIES_PATH = os.path.join(os.getcwd(), "cookies.txt")
 
 if os.getenv("LANGSMITH_TRACING") == "true":
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
