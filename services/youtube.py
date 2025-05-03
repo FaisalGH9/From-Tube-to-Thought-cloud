@@ -126,7 +126,7 @@ class YouTubeService:
                     'preferredcodec': AUDIO_FORMAT,
                     'preferredquality': audio_quality.replace('k', ''),
                 }],
-                ''quiet': False,
+                'quiet': False,
                 'verbose': True,
                 # Add ALL SSL and security bypasses
                 'nocheckcertificate': True,
