@@ -94,6 +94,9 @@ LONG_VIDEO_THRESHOLD = 60 * 60  # 60 minutes in seconds
 USE_ALTERNATE_AGENTS = os.getenv("USE_ALTERNATE_AGENTS", "true").lower() == "true"
 YT_USER_AGENT = os.getenv("YT_USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 
+# Add a setting to force use of the latest yt-dlp version
+FORCE_YT_DLP_UPDATE = os.getenv("FORCE_YT_DLP_UPDATE", "true").lower() == "true"
+
 # Ensure storage directories exist
 for dir_path in [VECTOR_DIR, CACHE_DIR, MEDIA_DIR]:
     os.makedirs(dir_path, exist_ok=True)
