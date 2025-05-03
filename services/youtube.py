@@ -1,15 +1,13 @@
 """
-YouTube service for downloading and processing videos using pytube
-with fallback to direct requests
+YouTube service for downloading and processing videos
 """
 import os
 import re
 import hashlib
 import asyncio
-import requests
 from typing import Dict, Any, Optional
 
-from pytubefix import YouTube
+import yt_dlp
 from pydub import AudioSegment
 
 from config.settings import (
@@ -62,20 +60,8 @@ class YouTubeService:
         # Get duration option
         duration = options.get('duration', 'full_video')
         
-        # Get video info (use simple implementation that doesn't rely on Torch)
-        video_info = {
-            'duration': 0,  # Default to 0 seconds if we can't determine
-            'title': 'Unknown'
-        }
-        
-        try:
-            # Try to get basic info without using the problematic pytube methods
-            simple_info = await self._get_simple_video_info(url)
-            if simple_info:
-                video_info = simple_info
-        except Exception as e:
-            print(f"Simple info retrieval failed: {e}")
-        
+        # Determine if it's a long video before downloading
+        video_info = await self._get_video_info(url)
         duration_seconds = video_info.get('duration', 0)
         
         # Set audio quality based on video length
@@ -83,141 +69,62 @@ class YouTubeService:
         if duration_seconds > LONG_VIDEO_THRESHOLD:
             audio_quality = LONG_AUDIO_QUALITY
             
-        # Try multiple download methods
-        downloaded_file = None
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': f'{output_path}.%(ext)s',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': AUDIO_FORMAT,
+                'preferredquality': audio_quality.replace('k', ''),
+            }],
+            'quiet': True,
+        }
         
-        # Method 1: Try pytube
-        try:
-            loop = asyncio.get_event_loop()
-            downloaded_file = await loop.run_in_executor(None, self._download_with_pytube, url, output_path)
-        except Exception as e:
-            print(f"Pytube download failed: {e}")
-            
-            # Method 2: Try alternative download using requests (bypassing torch)
-            try:
-                download_path = f"{output_path}.mp4"
-                success = await self._download_with_requests(url, download_path)
-                if success:
-                    downloaded_file = download_path
-            except Exception as e2:
-                print(f"Alternative download also failed: {e2}")
-        
-        if not downloaded_file or not os.path.exists(downloaded_file):
-            raise Exception(f"All download methods failed for {url}")
-            
-        # Convert to requested audio format if needed
-        if not downloaded_file.endswith(f".{AUDIO_FORMAT}"):
-            audio = AudioSegment.from_file(downloaded_file)
-            audio_file = f"{output_path}.{AUDIO_FORMAT}"
-            audio.export(audio_file, format=AUDIO_FORMAT, bitrate=audio_quality)
-            
-            # Remove original file if different
-            if downloaded_file != audio_file and os.path.exists(downloaded_file):
-                os.remove(downloaded_file)
-                
-            downloaded_file = audio_file
+        # Run download in a separate thread to not block the event loop
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
         
         # Process duration limits if needed
         if duration != 'full_video':
-            return await self._process_duration_limit(downloaded_file, duration)
+            return await self._process_duration_limit(f"{output_path}.{AUDIO_FORMAT}", duration)
         
-        return downloaded_file
+        return f"{output_path}.{AUDIO_FORMAT}"
     
-    async def _get_simple_video_info(self, url: str) -> Dict[str, Any]:
+    async def _get_video_info(self, url: str) -> Dict[str, Any]:
         """
-        Get basic video info without using problematic pytube methods
+        Get video metadata without downloading
         
         Args:
             url: YouTube URL
             
         Returns:
-            Dictionary with basic video information
+            Dictionary with video information
         """
-        # Direct HTTP request to get title and possibly duration
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            content = response.text
-            
-            # Extract title
-            title_match = re.search(r'<title>(.*?)</title>', content)
-            title = title_match.group(1).replace(' - YouTube', '') if title_match else 'Unknown'
-            
-            # We'll use a standard duration since it's hard to extract reliably
-            # from HTML only, but we could add more sophisticated extraction later
-            return {
-                'title': title,
-                'duration': 0,  # Default duration
-                'source': 'simple_http'
-            }
-        except Exception as e:
-            print(f"Simple info HTTP error: {e}")
-            return None
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'quiet': True,
+            'skip_download': True,
+            'no_warnings': True,
+        }
+        
+        loop = asyncio.get_event_loop()
+        info_dict = await loop.run_in_executor(
+            None, 
+            lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=False)
+        )
+        
+        return info_dict
     
-    def _download_with_pytube(self, url: str, output_path: str) -> str:
+    def _download_with_options(self, url: str, options: Dict[str, Any]) -> None:
         """
-        Download using pytube (sync function for executor)
+        Download using yt-dlp with given options (sync function for executor)
         
         Args:
             url: YouTube URL
-            output_path: Base path for output file (without extension)
-            
-        Returns:
-            Path to downloaded file
+            options: yt-dlp options dictionary
         """
-        try:
-            # Initialize pytube with additional user agent
-            yt = YouTube(url, use_oauth=False, allow_oauth_cache=False)
-            
-            # Add a custom user agent to avoid some blocks
-            yt.headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            
-            # Get the best audio stream
-            audio_stream = None
-            try:
-                audio_stream = yt.streams.filter(only_audio=True).order_by('abr').last()
-            except:
-                pass
-            
-            if not audio_stream:
-                # Fall back to any stream with audio
-                try:
-                    audio_stream = yt.streams.filter(progressive=True).order_by('resolution').first()
-                except:
-                    pass
-            
-            if not audio_stream:
-                raise Exception(f"No suitable audio stream found for {url}")
-            
-            # Download the stream
-            downloaded_file = audio_stream.download(
-                output_path=os.path.dirname(output_path),
-                filename=os.path.basename(output_path)
-            )
-            
-            return downloaded_file
-        except Exception as e:
-            print(f"Pytube download error: {e}")
-            raise
-    
-    async def _download_with_requests(self, url: str, output_path: str) -> bool:
-        """
-        Alternative download method using direct HTTP requests
-        
-        Args:
-            url: YouTube URL
-            output_path: Output file path
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        # This is a simple placeholder. In a real implementation, we would 
-        # need to implement a way to get the direct media URL and download it.
-        # For now, we'll just return False to indicate this method is not fully implemented
-        print("Direct download method not implemented yet")
-        return False
+        with yt_dlp.YoutubeDL(options) as ydl:
+            ydl.download([url])
     
     async def _process_duration_limit(self, audio_path: str, duration: str) -> str:
         """
