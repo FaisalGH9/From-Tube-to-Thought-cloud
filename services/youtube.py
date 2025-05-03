@@ -7,6 +7,7 @@ import hashlib
 import asyncio
 import logging
 import ssl
+import urllib.request
 from typing import Dict, Any, Optional
 
 # Configure logging
@@ -101,56 +102,49 @@ class YouTubeService:
             logging.error(f"Error getting video info: {e}")
             audio_quality = DEFAULT_AUDIO_QUALITY
         
-        # Create SSL context that doesn't verify certificates if needed
-        try:
-            # Temporarily unverified context to work around certificate issues
-            ssl._create_default_https_context = ssl._create_unverified_context
-            logging.info("Created unverified SSL context for this session")
-        except Exception as e:
-            logging.error(f"Failed to modify SSL context: {e}")
-        
         # Try different download strategies in sequence
         downloaded = False
         error_messages = []
         
         # Strategy 1: Use Android client with cookies
-        try:
-            logging.info(f"Trying download strategy 1: Android client with cookies")
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': f'{output_path}.%(ext)s',
-                'cookiefile': COOKIES_PATH,
-                'extractor_args': {'youtube': {'player_client': ['android']}},
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': AUDIO_FORMAT,
-                    'preferredquality': audio_quality.replace('k', ''),
-                }],
-                'quiet': False,
-                'verbose': True,
-                # Add ALL SSL and security bypasses
-                'nocheckcertificate': True,
-                'no_warnings': False,
-                 'prefer_insecure': True,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
-    }
-}
-            }
-            
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
-            downloaded = True
-            logging.info("Strategy 1 succeeded")
-        except Exception as e:
-            error_msg = f"Strategy 1 failed: {str(e)}"
-            logging.error(error_msg)
-            error_messages.append(error_msg)
+        if not downloaded:
+            try:
+                logging.info(f"Trying download strategy 1: Android client with cookies")
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'outtmpl': f'{output_path}.%(ext)s',
+                    'cookiefile': COOKIES_PATH,
+                    'extractor_args': {'youtube': {'player_client': ['android']}},
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': AUDIO_FORMAT,
+                        'preferredquality': audio_quality.replace('k', ''),
+                    }],
+                    'quiet': False,
+                    'verbose': True,
+                    # Add ALL SSL and security bypasses
+                    'nocheckcertificate': True,
+                    'no_warnings': False,
+                    'prefer_insecure': True,
+                    'geo_bypass': True,
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    }
+                }
+                
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
+                downloaded = True
+                logging.info("Strategy 1 succeeded")
+            except Exception as e:
+                error_msg = f"Strategy 1 failed: {str(e)}"
+                logging.error(error_msg)
+                error_messages.append(error_msg)
             
         # Strategy 2: Try with Android client without cookies
         if not downloaded:
@@ -166,8 +160,20 @@ class YouTubeService:
                         'preferredquality': audio_quality.replace('k', ''),
                     }],
                     'quiet': False,
+                    'verbose': True,
+                    # Add ALL SSL and security bypasses
                     'nocheckcertificate': True,
-                    'no_warnings': False
+                    'no_warnings': False,
+                    'prefer_insecure': True,
+                    'geo_bypass': True,
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    }
                 }
                 
                 loop = asyncio.get_event_loop()
@@ -193,8 +199,20 @@ class YouTubeService:
                         'preferredquality': audio_quality.replace('k', ''),
                     }],
                     'quiet': False,
+                    'verbose': True,
+                    # Add ALL SSL and security bypasses
                     'nocheckcertificate': True,
-                    'no_warnings': False
+                    'no_warnings': False,
+                    'prefer_insecure': True,
+                    'geo_bypass': True,
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    }
                 }
                 
                 loop = asyncio.get_event_loop()
@@ -206,16 +224,25 @@ class YouTubeService:
                 logging.error(error_msg)
                 error_messages.append(error_msg)
                 
-        # Strategy 4: Try with minimal options and browser headers
+        # Strategy 4: Try with web client without cookies
         if not downloaded:
             try:
-                logging.info(f"Trying download strategy 4: Browser headers and minimal options")
+                logging.info(f"Trying download strategy 4: Web client without cookies")
                 ydl_opts = {
-                    'format': 'bestaudio',
+                    'format': 'bestaudio/best',
                     'outtmpl': f'{output_path}.%(ext)s',
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': AUDIO_FORMAT,
+                        'preferredquality': audio_quality.replace('k', ''),
+                    }],
                     'quiet': False,
+                    'verbose': True,
+                    # Add ALL SSL and security bypasses
                     'nocheckcertificate': True,
                     'no_warnings': False,
+                    'prefer_insecure': True,
+                    'geo_bypass': True,
                     'http_headers': {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -224,6 +251,30 @@ class YouTubeService:
                         'Connection': 'keep-alive',
                         'Upgrade-Insecure-Requests': '1'
                     }
+                }
+                
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
+                downloaded = True
+                logging.info("Strategy 4 succeeded")
+            except Exception as e:
+                error_msg = f"Strategy 4 failed: {str(e)}"
+                logging.error(error_msg)
+                error_messages.append(error_msg)
+        
+        # Strategy 5: Try with minimal options as last resort
+        if not downloaded:
+            try:
+                logging.info(f"Trying download strategy 5: Minimal options")
+                ydl_opts = {
+                    'format': 'bestaudio',
+                    'outtmpl': f'{output_path}.%(ext)s',
+                    'quiet': False,
+                    'verbose': True,
+                    'nocheckcertificate': True,
+                    'no_warnings': False,
+                    'prefer_insecure': True,
+                    'geo_bypass': True,
                 }
                 
                 loop = asyncio.get_event_loop()
@@ -242,9 +293,9 @@ class YouTubeService:
                             break
                 
                 downloaded = True
-                logging.info("Strategy 4 succeeded")
+                logging.info("Strategy 5 succeeded")
             except Exception as e:
-                error_msg = f"Strategy 4 failed: {str(e)}"
+                error_msg = f"Strategy 5 failed: {str(e)}"
                 logging.error(error_msg)
                 error_messages.append(error_msg)
         
@@ -275,7 +326,13 @@ class YouTubeService:
                 'skip_download': True,
                 'no_warnings': True,
                 'cookiefile': COOKIES_PATH,
-                'nocheckcertificate': True
+                'nocheckcertificate': True,
+                'prefer_insecure': True,
+                'geo_bypass': True,
+                'extractor_args': {'youtube': {'player_client': ['android']}},
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                }
             }
             
             loop = asyncio.get_event_loop()
