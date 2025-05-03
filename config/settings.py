@@ -49,8 +49,5 @@ DEFAULT_AUDIO_QUALITY = "64k"
 LONG_AUDIO_QUALITY = "18k"  # Lower quality for long videos
 LONG_VIDEO_THRESHOLD = 60 * 60  # 60 minutes in seconds
 
-# Ensure storage directories exist
-for dir_path in [VECTOR_DIR, CACHE_DIR, MEDIA_DIR]:
-    os.makedirs(dir_path, exist_ok=True)
 
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
