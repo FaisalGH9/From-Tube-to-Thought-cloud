@@ -1,39 +1,23 @@
 """
-YouTube service for downloading and processing videos
+YouTube service for downloading and processing videos using pytube
+with fallback to direct requests
 """
 import os
 import re
 import hashlib
 import asyncio
-import logging
-import ssl
-import urllib.request
+import requests
 from typing import Dict, Any, Optional
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-
-# Apply SSL certificate verification bypass - comprehensive approach
-from services.ssl_fix import apply_ssl_fix
-ssl_success = apply_ssl_fix()
-logging.info(f"SSL fix application success: {ssl_success}")
-
-# Apply yt-dlp fix before importing
-from services.yt_dlp_fix import apply_yt_dlp_fix
-yt_dlp_success = apply_yt_dlp_fix()
-if not yt_dlp_success:
-    logging.error("Failed to apply yt-dlp fix. Video downloads may fail.")
-
-import yt_dlp
+from pytubefix import YouTube
 from pydub import AudioSegment
 
 from config.settings import (
-    MEDIA_DIR,
-    AUDIO_FORMAT,
+    MEDIA_DIR, 
+    AUDIO_FORMAT, 
     DEFAULT_AUDIO_QUALITY,
     LONG_AUDIO_QUALITY,
-    LONG_VIDEO_THRESHOLD,
-    COOKIES_PATH
+    LONG_VIDEO_THRESHOLD
 )
 
 class YouTubeService:
@@ -72,174 +56,168 @@ class YouTubeService:
         # Check if already downloaded
         existing_path = f"{output_path}.{AUDIO_FORMAT}"
         if os.path.exists(existing_path):
-            logging.info(f"Using existing audio file: {existing_path}")
+            print(f"Using existing audio file: {existing_path}")
             return existing_path
             
         # Get duration option
         duration = options.get('duration', 'full_video')
         
-        # Set default audio quality
-        audio_quality = DEFAULT_AUDIO_QUALITY
-        
-        # Try different download strategies in sequence
-        downloaded = False
-        error_messages = []
-        
-        # Unified base options with best security bypass settings
-        base_opts = {
-            'quiet': False,
-            'verbose': True,
-            'nocheckcertificate': True,
-            'no_warnings': False,
-            'prefer_insecure': True,
-            'geo_bypass': True,
-            'socket_timeout': 30,
-            'retries': 10,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
-            }
+        # Get video info (use simple implementation that doesn't rely on Torch)
+        video_info = {
+            'duration': 0,  # Default to 0 seconds if we can't determine
+            'title': 'Unknown'
         }
         
-        # Try to use external downloader
-        if not downloaded:
+        try:
+            # Try to get basic info without using the problematic pytube methods
+            simple_info = await self._get_simple_video_info(url)
+            if simple_info:
+                video_info = simple_info
+        except Exception as e:
+            print(f"Simple info retrieval failed: {e}")
+        
+        duration_seconds = video_info.get('duration', 0)
+        
+        # Set audio quality based on video length
+        audio_quality = DEFAULT_AUDIO_QUALITY
+        if duration_seconds > LONG_VIDEO_THRESHOLD:
+            audio_quality = LONG_AUDIO_QUALITY
+            
+        # Try multiple download methods
+        downloaded_file = None
+        
+        # Method 1: Try pytube
+        try:
+            loop = asyncio.get_event_loop()
+            downloaded_file = await loop.run_in_executor(None, self._download_with_pytube, url, output_path)
+        except Exception as e:
+            print(f"Pytube download failed: {e}")
+            
+            # Method 2: Try alternative download using requests (bypassing torch)
             try:
-                logging.info("Strategy 1: Using external downloader (curl)")
-                ydl_opts = {
-                    **base_opts,
-                    'format': 'bestaudio/best',
-                    'outtmpl': f'{output_path}.%(ext)s',
-                    'external_downloader': 'curl',
-                    'external_downloader_args': ['--insecure', '--retry', '10'],
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': AUDIO_FORMAT,
-                        'preferredquality': audio_quality.replace('k', ''),
-                    }]
-                }
+                download_path = f"{output_path}.mp4"
+                success = await self._download_with_requests(url, download_path)
+                if success:
+                    downloaded_file = download_path
+            except Exception as e2:
+                print(f"Alternative download also failed: {e2}")
+        
+        if not downloaded_file or not os.path.exists(downloaded_file):
+            raise Exception(f"All download methods failed for {url}")
+            
+        # Convert to requested audio format if needed
+        if not downloaded_file.endswith(f".{AUDIO_FORMAT}"):
+            audio = AudioSegment.from_file(downloaded_file)
+            audio_file = f"{output_path}.{AUDIO_FORMAT}"
+            audio.export(audio_file, format=AUDIO_FORMAT, bitrate=audio_quality)
+            
+            # Remove original file if different
+            if downloaded_file != audio_file and os.path.exists(downloaded_file):
+                os.remove(downloaded_file)
                 
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
-                downloaded = True
-                logging.info("Strategy 1 succeeded")
-            except Exception as e:
-                error_msg = f"Strategy 1 failed: {str(e)}"
-                logging.error(error_msg)
-                error_messages.append(error_msg)
+            downloaded_file = audio_file
         
-        # Try with iOS client
-        if not downloaded:
-            try:
-                logging.info("Strategy 2: Using iOS client")
-                ydl_opts = {
-                    **base_opts,
-                    'format': 'bestaudio/best',
-                    'outtmpl': f'{output_path}.%(ext)s',
-                    'extractor_args': {'youtube': {'player_client': ['ios']}},
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': AUDIO_FORMAT,
-                        'preferredquality': audio_quality.replace('k', ''),
-                    }]
-                }
-                
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
-                downloaded = True
-                logging.info("Strategy 2 succeeded")
-            except Exception as e:
-                error_msg = f"Strategy 2 failed: {str(e)}"
-                logging.error(error_msg)
-                error_messages.append(error_msg)
-        
-        # Try with tvhtml5 client
-        if not downloaded:
-            try:
-                logging.info("Strategy 3: Using tvhtml5 client")
-                ydl_opts = {
-                    **base_opts,
-                    'format': 'bestaudio/best',
-                    'outtmpl': f'{output_path}.%(ext)s',
-                    'extractor_args': {'youtube': {'player_client': ['tvhtml5']}},
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': AUDIO_FORMAT,
-                        'preferredquality': audio_quality.replace('k', ''),
-                    }]
-                }
-                
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, self._download_with_options, url, ydl_opts)
-                downloaded = True
-                logging.info("Strategy 3 succeeded")
-            except Exception as e:
-                error_msg = f"Strategy 3 failed: {str(e)}"
-                logging.error(error_msg)
-                error_messages.append(error_msg)
-        
-        # If all strategies failed, raise exception with all error messages
-        if not downloaded:
-            raise Exception(f"All download strategies failed: {'; '.join(error_messages)}")
-        
-        # Process duration limit if needed
+        # Process duration limits if needed
         if duration != 'full_video':
-            return await self._process_duration_limit(f"{output_path}.{AUDIO_FORMAT}", duration)
+            return await self._process_duration_limit(downloaded_file, duration)
         
-        return f"{output_path}.{AUDIO_FORMAT}"
+        return downloaded_file
     
-    async def _get_video_info(self, url: str) -> Dict[str, Any]:
+    async def _get_simple_video_info(self, url: str) -> Dict[str, Any]:
         """
-        Get video information using yt-dlp
+        Get basic video info without using problematic pytube methods
         
         Args:
             url: YouTube URL
             
         Returns:
-            Dictionary with video information
+            Dictionary with basic video information
         """
+        # Direct HTTP request to get title and possibly duration
         try:
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'quiet': True,
-                'skip_download': True,
-                'no_warnings': True,
-                'nocheckcertificate': True,
-                'prefer_insecure': True,
-                'geo_bypass': True,
-                'extractor_args': {'youtube': {'player_client': ['ios']}},
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-                }
-            }
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            content = response.text
             
-            loop = asyncio.get_event_loop()
-            info_dict = await loop.run_in_executor(
-                None,
-                lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=False)
-            )
-            return info_dict
-        except Exception as e:
-            logging.error(f"Error getting video info: {e}")
-            # Return minimal info when extraction fails
+            # Extract title
+            title_match = re.search(r'<title>(.*?)</title>', content)
+            title = title_match.group(1).replace(' - YouTube', '') if title_match else 'Unknown'
+            
+            # We'll use a standard duration since it's hard to extract reliably
+            # from HTML only, but we could add more sophisticated extraction later
             return {
-                'title': 'Unknown',
-                'duration': 0
+                'title': title,
+                'duration': 0,  # Default duration
+                'source': 'simple_http'
             }
+        except Exception as e:
+            print(f"Simple info HTTP error: {e}")
+            return None
     
-    def _download_with_options(self, url: str, options: Dict[str, Any]) -> None:
+    def _download_with_pytube(self, url: str, output_path: str) -> str:
         """
-        Download with yt-dlp using specified options
+        Download using pytube (sync function for executor)
         
         Args:
             url: YouTube URL
-            options: yt-dlp options dictionary
+            output_path: Base path for output file (without extension)
+            
+        Returns:
+            Path to downloaded file
         """
-        with yt_dlp.YoutubeDL(options) as ydl:
-            ydl.download([url])
+        try:
+            # Initialize pytube with additional user agent
+            yt = YouTube(url, use_oauth=False, allow_oauth_cache=False)
+            
+            # Add a custom user agent to avoid some blocks
+            yt.headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            # Get the best audio stream
+            audio_stream = None
+            try:
+                audio_stream = yt.streams.filter(only_audio=True).order_by('abr').last()
+            except:
+                pass
+            
+            if not audio_stream:
+                # Fall back to any stream with audio
+                try:
+                    audio_stream = yt.streams.filter(progressive=True).order_by('resolution').first()
+                except:
+                    pass
+            
+            if not audio_stream:
+                raise Exception(f"No suitable audio stream found for {url}")
+            
+            # Download the stream
+            downloaded_file = audio_stream.download(
+                output_path=os.path.dirname(output_path),
+                filename=os.path.basename(output_path)
+            )
+            
+            return downloaded_file
+        except Exception as e:
+            print(f"Pytube download error: {e}")
+            raise
+    
+    async def _download_with_requests(self, url: str, output_path: str) -> bool:
+        """
+        Alternative download method using direct HTTP requests
+        
+        Args:
+            url: YouTube URL
+            output_path: Output file path
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        # This is a simple placeholder. In a real implementation, we would 
+        # need to implement a way to get the direct media URL and download it.
+        # For now, we'll just return False to indicate this method is not fully implemented
+        print("Direct download method not implemented yet")
+        return False
     
     async def _process_duration_limit(self, audio_path: str, duration: str) -> str:
         """
@@ -252,6 +230,7 @@ class YouTubeService:
         Returns:
             Path to processed audio file
         """
+        # Define duration limit in milliseconds
         duration_limits = {
             'first_5_minutes': 5 * 60 * 1000,
             'first_10_minutes': 10 * 60 * 1000,
@@ -261,16 +240,23 @@ class YouTubeService:
         
         limit_ms = duration_limits.get(duration, None)
         if not limit_ms:
-            return audio_path
+            return audio_path  # Return original if no valid limit
         
+        # Create output path
         output_path = audio_path.replace(f".{AUDIO_FORMAT}", f"_{duration}.{AUDIO_FORMAT}")
         
+        # Check if already processed
         if os.path.exists(output_path):
             return output_path
-        
+            
+        # Load audio file
         loop = asyncio.get_event_loop()
         sound = await loop.run_in_executor(None, AudioSegment.from_file, audio_path)
+        
+        # Trim to duration
         trimmed_sound = sound[:limit_ms]
+        
+        # Export
         await loop.run_in_executor(
             None,
             lambda: trimmed_sound.export(output_path, format=AUDIO_FORMAT)
