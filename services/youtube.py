@@ -152,4 +152,3 @@ class YouTubeService:
         trimmed = sound[:limit_ms]
         await loop.run_in_executor(None, lambda: trimmed.export(trimmed_path, format=AUDIO_FORMAT))
         return trimmed_path
-
