@@ -12,7 +12,7 @@ from config.settings import (
     MEDIA_DIR, 
     AUDIO_FORMAT, 
     DEFAULT_AUDIO_QUALITY,
-    LONG_AUDIO_QUALITY,
+    LONG_VIDEO_QUALITY,
     LONG_VIDEO_THRESHOLD
 )
 
@@ -32,7 +32,8 @@ class YouTubeService:
         """
         Extract video ID from YouTube URL or create a hash if extraction fails
         """
-        youtube_regex = r'(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|embed\/|v\/|shorts\/))([^?&"'>]+)'
+        # Fixed regex: double-quoted raw string to avoid unmatched ']' errors
+        youtube_regex = r"(youtu\.be\/|youtube\.com\/(watch\?(.*&)?v=|embed\/|v\/|shorts\/))([^?&\"'>]+)"
         match = re.search(youtube_regex, url)
         if match:
             return match.group(4)
@@ -62,7 +63,7 @@ class YouTubeService:
         duration_seconds = video_info.get('duration', 0)
         audio_quality = DEFAULT_AUDIO_QUALITY
         if duration_seconds > LONG_VIDEO_THRESHOLD:
-            audio_quality = LONG_AUDIO_QUALITY
+            audio_quality = LONG_VIDEO_QUALITY
         
         downloaded_file = None
         # Attempt pytube download with proxy
