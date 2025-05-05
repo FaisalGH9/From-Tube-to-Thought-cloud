@@ -29,8 +29,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY", "")
 
 # LLM Models
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo")
-SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "gpt-3.5-turbo")
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo-0125")
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "gpt-3.5-turbo-0125")
 EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL", "text-embedding-3-small")
 TRANSCRIPTION_MODEL = os.getenv("TRANSCRIPTION_MODEL", "whisper-1")
 

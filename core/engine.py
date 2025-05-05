@@ -6,7 +6,7 @@ from transcription.service import TranscriptionService
 from retrieval.vector_store import VectorStore
 from llm.provider import LLMProvider
 from cache.manager import CacheManager
-
+from config.settings import DEFAULT_MODEL
 
 
 class ProcessingEngine:
@@ -63,13 +63,19 @@ class ProcessingEngine:
         else:  # hybrid
             vector_weight = 0.7
 
-        context_data = await self.vector_store.hybrid_search(video_id, query, vector_weight=vector_weight)
+        context_data = await self.vector_store.hybrid_search(video_id, query, k=4, vector_weight=vector_weight)
         context_text = "\n\n".join([item["content"] for item in context_data])
 
         if stream:
             async def process_stream():
                 full_response = ""
-                async for chunk in self.llm_provider.stream_response(query, context_data, video_id=video_id):
+                async for chunk in self.llm_provider.stream_response(
+                    query,
+                    context_data, 
+                    video_id=video_id,
+                    model=options.get("model", DEFAULT_MODEL),
+                    max_tokens=400
+                    ):
                     if not chunk["is_complete"]:
                         full_response += chunk["token"]
                         yield chunk
@@ -85,7 +91,12 @@ class ProcessingEngine:
             return process_stream()
 
         else:
-            result = await self.llm_provider.generate(query, context_data, video_id=video_id)
+            result = await self.llm_provider.generate(
+                query, 
+                context_data, 
+                video_id=video_id,
+                model=options.get("model", DEFAULT_MODEL),
+                max_tokens=400)
             processed_response = result["response"]
             self.cache_manager.cache_response(video_id, query, processed_response)
 
@@ -99,7 +110,7 @@ class ProcessingEngine:
         if cached_summary:
             return cached_summary
 
-        all_chunks = await self.vector_store.hybrid_search(video_id, "full transcript", k=20)
+        all_chunks = await self.vector_store.hybrid_search(video_id, "full transcript", k=4)
         full_content = "\n\n".join([chunk["content"] for chunk in all_chunks])
 
         if not full_content.strip():

@@ -49,7 +49,7 @@ class LLMProvider:
         context_data: List[Dict[str, Any]],
         video_id: str = "",
         model: str = DEFAULT_MODEL,
-        max_tokens: int = 800,
+        max_tokens: int = 400,
         temperature: float = 0.2
     ) -> Dict[str, Any]:
         context_text = "\n\n".join([item["content"] for item in context_data])
