@@ -18,12 +18,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the project
 COPY . .
 
-# Expose default Streamlit port
-EXPOSE 8501
+# Expose port 8080 for Google Cloud Run
+EXPOSE 8080
 
 # Set environment to production
 ENV CLOUD_RUN=true
 ENV PYTHONUNBUFFERED=1
 
-# Launch Streamlit app
-CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.enableCORS=false"]
+# Launch Streamlit app on port 8080 (dynamic from env)
+CMD ["sh", "-c", "streamlit run main.py --server.port=$PORT --server.address=0.0.0.0 --server.enableCORS=false"]
