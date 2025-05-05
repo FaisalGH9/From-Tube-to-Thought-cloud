@@ -29,9 +29,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY", "")
 
 # LLM Models
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo-0125")
-SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "gpt-3.5-turbo-0125")
-EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL", "text-embedding-3-small")
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo-instruct")
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "gpt-3.5-turbo")
+EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL", "text-embedding-ada-002")
 TRANSCRIPTION_MODEL = os.getenv("TRANSCRIPTION_MODEL", "whisper-1")
 
 # Chunking
@@ -44,7 +44,7 @@ CACHE_TTL = 86400  # 24 hours
 
 # YouTube audio download settings
 AUDIO_FORMAT = "mp3"
-DEFAULT_AUDIO_QUALITY = "64k"
+DEFAULT_AUDIO_QUALITY = "32k"
 LONG_AUDIO_QUALITY = "18k"
 LONG_VIDEO_THRESHOLD = 60 * 60  # 60 minutes
 

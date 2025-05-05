@@ -2,7 +2,7 @@ from typing import Dict, Any, AsyncGenerator, List
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from config.settings import OPENAI_API_KEY, DEFAULT_MODEL
-
+from langchain.llms import OpenAI
 # Updated language-specific system prompts
 LANGUAGE_PROMPTS = {
     "en": (
@@ -36,12 +36,19 @@ class LLMProvider:
         self.api_key = OPENAI_API_KEY
 
     def _get_model(self, temperature: float, model: str, streaming: bool = False):
-        return ChatOpenAI(
+        if "instruct" in model:
+            return OpenAI(
+            model_name=model,
+            temperature=temperature,
+            openai_api_key=self.api_key,
+        )
+        else:
+            return ChatOpenAI(
             model_name=model,
             temperature=temperature,
             openai_api_key=self.api_key,
             streaming=streaming
-        )
+         )
 
     async def generate(
         self,
@@ -173,3 +180,18 @@ class LLMProvider:
         response = await llm.apredict_messages(messages)
         return response.content.strip()
     
+    async def translate(self, text: str, target_lang: str) -> str:
+        prompt = f"Translate the following text to {target_lang}:\n\n{text}"
+        try:
+            return await self.generate_raw(prompt=prompt, model="gpt-3.5-turbo", max_tokens=400)
+        except Exception as e:
+            print(f"[translate] Error: {e}")
+            return text
+
+    async def generate_raw(self, prompt: str, model: str = DEFAULT_MODEL, max_tokens: int = 400) -> str:
+        llm = ChatOpenAI(
+            model_name=model,
+            temperature=0,
+            openai_api_key=self.api_key
+        )
+        return await llm.apredict(prompt)

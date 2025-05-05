@@ -94,7 +94,7 @@ class YouTubeService:
         Get basic video info via HTTP (with proxy)
         """
         try:
-            resp = requests.get(url, timeout=10, proxies=PROXIES)
+            resp = requests.get(url, timeout=10 proxies=PROXIES)
             resp.raise_for_status()
             title_match = re.search(r'<title>(.*?)<\/title>', resp.text)
             title = title_match.group(1).replace(' - YouTube', '') if title_match else 'Unknown'
@@ -110,7 +110,7 @@ class YouTubeService:
         yt = YouTube(
             url,
             use_oauth=False,
-            allow_oauth_cache=False,
+            allow_oauth_cache=False
             proxies=PROXIES
         )
         # Mimic a real browser
