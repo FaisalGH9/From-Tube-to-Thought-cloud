@@ -1,38 +1,24 @@
 """
-Vector storage using Pinecone v3 and BM25 hybrid search
+Vector storage using ChromaDB and BM25 hybrid search
 """
 import os
 import asyncio
 from typing import List, Dict, Any
-
 from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
 from langchain.schema import Document
-from langchain_community.vectorstores import Pinecone as LangchainPinecone
 from rank_bm25 import BM25Okapi
-from pinecone import Pinecone, ServerlessSpec
-
 from config.settings import (
     OPENAI_API_KEY,
     EMBEDDINGS_MODEL,
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
-    PINECONE_API_KEY,
-    PINECONE_ENVIRONMENT,
-    PINECONE_INDEX_NAME
+    VECTOR_DIR
 )
 from retrieval.chunking import adaptive_text_splitter
 
 class VectorStore:
     def __init__(self):
-        # Pinecone client init (v3)
-        self.pc = Pinecone(api_key=PINECONE_API_KEY)
-        if PINECONE_INDEX_NAME not in self.pc.list_indexes().names():
-            self.pc.create_index(
-                name=PINECONE_INDEX_NAME,
-                dimension=1536,
-                metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region=PINECONE_ENVIRONMENT)
-            )
         self.embeddings = OpenAIEmbeddings(
             openai_api_key=OPENAI_API_KEY,
             model=EMBEDDINGS_MODEL
@@ -55,22 +41,21 @@ class VectorStore:
             metadatas.append({
                 "chunk_id": i,
                 "video_id": video_id,
-                "source": "transcript"
+                "source": "transcript",
+                "language": transcript_data.get("language", "en")
             })
 
-        vectorstore = LangchainPinecone.from_existing_index(
-            index_name=PINECONE_INDEX_NAME,
-            embedding=self.embeddings,
-            namespace=video_id
+        self.vectorstore = Chroma(
+            collection_name=video_id,
+            embedding_function=self.embeddings,
+            persist_directory=VECTOR_DIR
         )
 
-        await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: vectorstore.add_texts(texts=texts, metadatas=metadatas)
-        )
+        self.vectorstore.add_texts(texts=texts, metadatas=metadatas)
 
         docs = [Document(page_content=t, metadata=m) for t, m in zip(texts, metadatas)]
         await self._create_bm25_index(docs, video_id)
+        self.vectorstore.persist()
 
     async def hybrid_search(
         self,
@@ -81,15 +66,15 @@ class VectorStore:
     ) -> List[Dict[str, Any]]:
         loop = asyncio.get_event_loop()
 
-        vectorstore = LangchainPinecone.from_existing_index(
-            index_name=PINECONE_INDEX_NAME,
-            embedding=self.embeddings,
-            namespace=video_id
+        self.vectorstore = Chroma(
+            collection_name=video_id,
+            embedding_function=self.embeddings,
+            persist_directory=VECTOR_DIR
         )
 
         vector_docs = await loop.run_in_executor(
             None,
-            lambda: vectorstore.similarity_search(query, k=k)
+            lambda: self.vectorstore.similarity_search(query, k=k)
         )
 
         if video_id not in self.bm25_indexes:
@@ -104,7 +89,7 @@ class VectorStore:
         return self._format_search_results(combined_results[:k])
 
     def _format_search_results(self, docs: List[Document]) -> List[Dict[str, Any]]:
-        return [{"content": doc.page_content} for doc in docs]
+        return [{"content": doc.page_content, **doc.metadata} for doc in docs]
 
     async def _create_bm25_index(self, docs: List[Document], video_id: str) -> None:
         tokenized = [doc.page_content.lower().split() for doc in docs]
