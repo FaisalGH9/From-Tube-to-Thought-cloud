@@ -35,10 +35,12 @@ Leveraging OpenAI's transcription and embedding models alongside advanced retrie
 - **Intelligent Caching**: Multi-level caching system for improved performance
 - **Responsive UI**: Streamlit-based interface with real-time processing feedback
 - **Configurable Processing**: Options for processing duration, quality, and performance
+- **RAG Architecture**: Retrieval Augmented Generation ensuring responses are grounded in actual video content
+- **Agentic AI**: Autonomous translator agent that intelligently selects appropriate tools for language processing
 
 ## Architecture
 
-The system follows a modular architecture with six primary components:
+The system follows a modular architecture with seven primary components:
 
 1. **Processing Engine** (`core/engine.py`): Orchestrates the overall workflow
 2. **YouTube Service** (`services/youtube.py`): Handles video access and audio extraction
@@ -46,6 +48,7 @@ The system follows a modular architecture with six primary components:
 4. **Vector Store** (`retrieval/vector_store.py`): Indexes and retrieves relevant content
 5. **LLM Provider** (`llm/provider.py`): Generates natural language responses
 6. **Cache Manager** (`cache/manager.py`): Optimizes performance with multi-level caching
+7. **Translator Agent** (`agents/translator_agent.py`): Autonomous agent for language detection and translation
 
 ### Data Flow Pipeline
 
@@ -60,6 +63,23 @@ YouTube URL → Audio Download → Transcription → Chunking → Vector Indexin
 5. Content is indexed using OpenAI embeddings and BM25
 6. User queries are processed with hybrid semantic/keyword search
 7. Contextually relevant responses are generated via OpenAI's language models
+
+### RAG Architecture
+
+From-Tube-To-Thought implements a Retrieval Augmented Generation (RAG) architecture to ensure all responses are grounded in the actual video content:
+
+1. **Retrieval Component**: ChromaDB vector database with hybrid search combining vector similarity and BM25
+2. **Augmentation Component**: Context preparation and prompt engineering with relevant transcript segments
+3. **Generation Component**: LLM-based response generation that stays faithful to the retrieved context
+
+### Agentic AI System
+
+The application includes an autonomous translator agent that:
+
+1. Intelligently selects between language detection and translation tools
+2. Makes decisions about when translation is needed
+3. Handles cross-language interactions automatically
+4. Follows a reasoning process to determine appropriate steps
 
 ## Installation
 
@@ -110,31 +130,34 @@ The web interface will be available at `http://localhost:8501`.
 4. Once processing completes, you can:
    - Ask questions about the video content in the Chat tab
    - Generate summaries of different lengths in the Summary tab
+   - Ask questions in different languages - the translator agent will handle the translation
 
 ## Repository Structure
 
 ```
 from-tube-to-thought/
+├── agents/
+│   └── translator_agent.py  # Autonomous translator agent
 ├── cache/
-│   └── manager.py         # Multi-level caching system
+│   └── manager.py           # Multi-level caching system
 ├── config/
-│   └── settings.py        # Configuration settings
+│   └── settings.py          # Configuration settings
 ├── core/
-│   └── engine.py          # Main processing orchestration
+│   └── engine.py            # Main processing orchestration
 ├── llm/
-│   └── provider.py        # Language model interface
+│   └── provider.py          # Language model interface
 ├── retrieval/
-│   ├── chunking.py        # Text chunking strategies
-│   └── vector_store.py    # Vector and BM25 search
+│   ├── chunking.py          # Text chunking strategies
+│   └── vector_store.py      # Vector and BM25 search
 ├── services/
-│   └── youtube.py         # YouTube downloader
+│   └── youtube.py           # YouTube downloader
 ├── transcription/
-│   └── service.py         # Audio transcription
-├── main.py                # Streamlit UI
-├── Dockerfile             # Container definition
-├── requirements.txt       # Dependencies
-├── logo.png               # Application logo
-└── README.md              # This file
+│   └── service.py           # Audio transcription
+├── main.py                  # Streamlit UI
+├── Dockerfile               # Container definition
+├── requirements.txt         # Dependencies
+├── logo.png                 # Application logo
+└── README.md                # This file
 ```
 
 ## Configuration
@@ -146,6 +169,7 @@ Key settings can be adjusted in `config/settings.py`:
 - **Caching Settings**: Set TTL (time-to-live) for cache entries
 - **Performance Options**: Configure concurrent processing limits
 - **Audio Quality**: Set bitrate for downloaded audio
+- **Agent Settings**: Configure the behavior of the translator agent
 
 ## Deployment
 
@@ -179,6 +203,15 @@ Environment variables to set in Cloud Run:
 - `OPENAI_API_KEY`: Your OpenAI API key
 - `CLOUD_RUN`: Set to "true"
 
+### Testing the Translator Agent
+
+To verify the translator agent is working correctly:
+
+```bash
+python test_translator_agent.py
+```
+
+This script tests language detection and translation capabilities of the agent.
 
 ## Some demonstration
 
@@ -192,7 +225,8 @@ https://drive.google.com/drive/folders/1x66zk3MHvIntICi3u-Q3uzydhxpeePTA?usp=dri
 
 - [OpenAI](https://openai.com/) for providing the AI models
 - [PyTubeFix](https://github.com/JuanBindez/pytubefix) for YouTube integration
-- [LangChain](https://langchain.com/) for vector store components
+- [LangChain](https://langchain.com/) for vector store components and agent framework
+- [ChromaDB](https://www.trychroma.com/) for vector database functionality
 - [Streamlit](https://streamlit.io/) for the user interface framework
 
 ---
