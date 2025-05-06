@@ -179,6 +179,11 @@ Environment variables to set in Cloud Run:
 - `OPENAI_API_KEY`: Your OpenAI API key
 - `CLOUD_RUN`: Set to "true"
 
+
+## License
+
+[MIT License](LICENSE)
+
 ## License
 
 [MIT License](LICENSE)
