@@ -180,9 +180,9 @@ Environment variables to set in Cloud Run:
 - `CLOUD_RUN`: Set to "true"
 
 
-## License
+## Some demonstration
 
-[MIT License](LICENSE)
+https://drive.google.com/drive/folders/1x66zk3MHvIntICi3u-Q3uzydhxpeePTA?usp=drive_link
 
 ## License
 
