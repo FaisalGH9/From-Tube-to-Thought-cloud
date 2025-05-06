@@ -72,15 +72,6 @@ From-Tube-To-Thought implements a Retrieval Augmented Generation (RAG) architect
 2. **Augmentation Component**: Context preparation and prompt engineering with relevant transcript segments
 3. **Generation Component**: LLM-based response generation that stays faithful to the retrieved context
 
-### Agentic AI System
-
-The application includes an autonomous translator agent that:
-
-1. Intelligently selects between language detection and translation tools
-2. Makes decisions about when translation is needed
-3. Handles cross-language interactions automatically
-4. Follows a reasoning process to determine appropriate steps
-
 ## Installation
 
 ### Prerequisites
