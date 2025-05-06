@@ -127,8 +127,6 @@ The web interface will be available at `http://localhost:8501`.
 
 ```
 from-tube-to-thought/
-├── agents/
-│   └── translator_agent.py  # Autonomous translator agent
 ├── cache/
 │   └── manager.py           # Multi-level caching system
 ├── config/
